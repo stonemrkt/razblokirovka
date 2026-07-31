@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Предпросмотр по дням — не для посетителей</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#232323; --panel:#383838; --hairline:rgba(255,255,255,.12);
+    --text:#FFFFFF; --text-dim:rgba(255,255,255,.64); --text-faint:rgba(255,255,255,.40);
+    --accent:#FFC600; --danger:#E4694F;
+    --font-display:'Avenir Next','Avenir','Onest',sans-serif;
+    --font-body:'Onest', system-ui, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-body); padding:28px 20px 60px; }
+  .wrap{ max-width:760px; margin:0 auto; }
+  .warn{
+    background:#3a2a10; border:1px solid var(--accent); color:var(--accent);
+    padding:12px 16px; font-size:13px; font-weight:600; margin-bottom:28px;
+  }
+  h1{ font-family:var(--font-display); font-weight:800; font-size:22px; margin:0 0 4px; }
+  .sub{ color:var(--text-dim); font-size:14px; margin:0 0 24px; }
+  .day-picker{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:28px; }
+  .day-btn{
+    font-family:var(--font-body); font-weight:700; font-size:13px;
+    padding:10px 16px; border:1px solid var(--hairline); background:var(--panel);
+    color:var(--text); cursor:pointer; border-radius:2px;
+  }
+  .day-btn.is-active{ background:var(--accent); color:var(--bg); border-color:var(--accent); }
+  .day-btn__date{ display:block; font-size:11px; font-weight:500; color:inherit; opacity:.7; margin-top:2px; }
+
+  .offer-card{
+    background:var(--panel); border:1px solid var(--hairline); padding:30px;
+    display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap;
+    margin-bottom:16px;
+  }
+  .offer-card__tag{ font-weight:700; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }
+  .offer-card__title{ font-family:var(--font-display); font-weight:800; font-size:26px; }
+  .offer-card__desc{ margin-top:8px; color:var(--text-dim); font-size:14px; max-width:420px; }
+  .offer-card__meta{ font-weight:600; font-size:12px; color:var(--text-faint); }
+
+  .contact-note{ color:var(--accent); font-weight:600; font-size:14px; margin-bottom:8px; }
+  .empty-note{ color:var(--text-faint); font-size:13px; }
+
+  .countdown-note{ color:var(--text-dim); font-size:13px; margin-top:24px; }
+  .countdown-note b{ color:var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="warn">⚠️ Служебная страница только для вас — не публиковать, не линковать с основного сайта. На посетителей не влияет. Данные серий подтягиваются напрямую из index.html — работает только на реальном хостинге, не через file:// на диске.</div>
+
+  <h1>Что покажется на сайте — по дням</h1>
+  <p class="sub">Нажмите на дату — карточка ниже покажет ровно то, что увидит посетитель сайта в этот момент.</p>
+
+  <div class="day-picker" id="dayPicker"></div>
+
+  <div id="offerOut"></div>
+  <div id="contactOut"></div>
+  <p class="countdown-note" id="countdownOut"></p>
+</div>
+
+<script>
+  var picker = document.getElementById('dayPicker');
+  var offerOut = document.getElementById('offerOut');
+  var contactOut = document.getElementById('contactOut');
+  var countdownOut = document.getElementById('countdownOut');
+  var episodes = [];
+
+  offerOut.innerHTML = '<p class="empty-note">Загружаю данные из index.html…</p>';
+
+  fetch('index.html')
+    .then(function(r){
+      if (!r.ok){ throw new Error('HTTP ' + r.status); }
+      return r.text();
+    })
+    .then(function(html){
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var dataEl = doc.getElementById('episodesData');
+      if (!dataEl){ throw new Error('в index.html не нашёлся блок episodesData'); }
+      episodes = JSON.parse(dataEl.textContent);
+      init();
+    })
+    .catch(function(err){
+      offerOut.innerHTML =
+        '<div class="warn">Не удалось подтянуть данные из index.html (' + err.message + '). ' +
+        'Эта страница должна лежать рядом с index.html на реальном хостинге — ' +
+        'через file:// на диске fetch не работает, браузер это блокирует.</div>';
+    });
+
+  function fmt(d){
+    return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }) + ' в ' +
+           d.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function init(){
+    offerOut.innerHTML = '';
+    episodes.forEach(function(ep, i){
+      var btn = document.createElement('button');
+      btn.className = 'day-btn';
+      btn.innerHTML = ep.label + '<span class="day-btn__date">' + fmt(new Date(ep.start)) + '</span>';
+      btn.addEventListener('click', function(){ render(i); });
+      picker.appendChild(btn);
+    });
+    render(2); // по умолчанию открываем Серию 1 — самый частый вопрос
+  }
+
+  function render(i){
+    Array.prototype.forEach.call(picker.children, function(b, j){
+      b.classList.toggle('is-active', j === i);
+    });
+    var ep = episodes[i];
+
+    if (ep.offer){
+      offerOut.innerHTML =
+        '<div class="offer-card">' +
+          '<div><div class="offer-card__tag">Идёт сейчас</div>' +
+          '<div class="offer-card__title">' + ep.offer.title + '</div>' +
+          '<p class="offer-card__desc">' + ep.offer.desc + '</p></div>' +
+          '<div class="offer-card__meta">' + ep.offer.tag + '</div>' +
+        '</div>';
+      contactOut.innerHTML = '<p class="contact-note">Уточните детали — ' + ep.offer.tag + '</p>';
+    } else {
+      offerOut.innerHTML =
+        '<div class="offer-card">' +
+          '<div><div class="offer-card__tag">' + (ep.id === 'final' ? 'Финал' : 'Спецвыпуск') + '</div>' +
+          '<div class="offer-card__title">' + ep.label + ' — цены на блоки не показываются в этом блоке</div>' +
+          '<p class="offer-card__desc">Для «' + ep.label.toLowerCase() + '» карточка предложения остаётся в состоянии «между сериями» — ' +
+          'цены не привязаны к этому эпизоду напрямую.</p></div>' +
+        '</div>';
+      contactOut.innerHTML = '<p class="empty-note">Строка «Уточните детали» в этот день не показывается.</p>';
+    }
+
+    countdownOut.innerHTML = 'Момент начала: <b>' + fmt(new Date(ep.start)) + '</b>' +
+      (ep.end ? ' · окончание: <b>' + fmt(new Date(ep.end)) + '</b>' : '');
+  }
+</script>
+</body>
+</html>
